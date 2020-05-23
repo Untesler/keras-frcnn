@@ -1,4 +1,21 @@
 from __future__ import division
+
+import logging, os
+logging.disable(logging.WARNING)
+
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+	try:
+		# Currently, memory growth needs to be the same across GPUs
+		for gpu in gpus:
+			tf.config.experimental.set_memory_growth(gpu, True)
+		logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+		print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+	except RuntimeError as e:
+		# Memory growth must be set before GPUs have been initialized
+		print(e)
+
 import os
 import cv2
 import numpy as np
@@ -7,9 +24,8 @@ import pickle
 from optparse import OptionParser
 import time
 from keras_frcnn import config
-from keras import backend as K
-from keras.layers import Input
-from keras.models import Model
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
 from keras_frcnn import roi_helpers
 
 sys.setrecursionlimit(40000)
@@ -106,12 +122,8 @@ if C.network == 'resnet50':
 elif C.network == 'vgg':
 	num_features = 512
 
-if K.image_dim_ordering() == 'th':
-	input_shape_img = (3, None, None)
-	input_shape_features = (num_features, None, None)
-else:
-	input_shape_img = (None, None, 3)
-	input_shape_features = (None, None, num_features)
+input_shape_img = (None, None, 3)
+input_shape_features = (None, None, num_features)
 
 
 img_input = Input(shape=input_shape_img)
@@ -158,14 +170,13 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 	X, ratio = format_img(img, C)
 
-	if K.image_dim_ordering() == 'tf':
-		X = np.transpose(X, (0, 2, 3, 1))
+	X = np.transpose(X, (0, 2, 3, 1))
 
 	# get the feature maps and output from the RPN
 	[Y1, Y2, F] = model_rpn.predict(X)
 	
 
-	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7)
+	R = roi_helpers.rpn_to_roi(Y1, Y2, C, 'tf', overlap_thresh=0.7)
 
 	# convert from (x1,y1,x2,y2) to (x,y,w,h)
 	R[:, 2] -= R[:, 0]

@@ -1,4 +1,21 @@
 from __future__ import division
+
+import logging, os
+logging.disable(logging.WARNING)
+
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+	try:
+		# Currently, memory growth needs to be the same across GPUs
+		for gpu in gpus:
+			tf.config.experimental.set_memory_growth(gpu, True)
+		logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+		print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+	except RuntimeError as e:
+		# Memory growth must be set before GPUs have been initialized
+		print(e)
+
 import random
 import pprint
 import sys
@@ -7,14 +24,13 @@ import numpy as np
 from optparse import OptionParser
 import pickle
 
-from keras import backend as K
-from keras.optimizers import Adam, SGD, RMSprop
-from keras.layers import Input
-from keras.models import Model
+from tensorflow.keras.optimizers import Adam, SGD, RMSprop
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
+from tensorflow.keras.utils import Progbar
 from keras_frcnn import config, data_generators
 from keras_frcnn import losses as losses
 import keras_frcnn.roi_helpers as roi_helpers
-from keras.utils import generic_utils
 
 sys.setrecursionlimit(40000)
 
@@ -107,13 +123,10 @@ print('Num train samples {}'.format(len(train_imgs)))
 print('Num val samples {}'.format(len(val_imgs)))
 
 
-data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
-data_gen_val = data_generators.get_anchor_gt(val_imgs, classes_count, C, nn.get_img_output_length,K.image_dim_ordering(), mode='val')
+data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, 'tf', mode='train')
+data_gen_val = data_generators.get_anchor_gt(val_imgs, classes_count, C, nn.get_img_output_length,'tf', mode='val')
 
-if K.image_dim_ordering() == 'th':
-	input_shape_img = (3, None, None)
-else:
-	input_shape_img = (None, None, 3)
+input_shape_img = (None, None, 3)
 
 img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
@@ -138,7 +151,7 @@ try:
 	model_rpn.load_weights(C.base_net_weights, by_name=True)
 	model_classifier.load_weights(C.base_net_weights, by_name=True)
 except:
-	print('Could not load pretrained model weights. Weights can be found in the keras application folder \
+	print(f'Could not load pretrained model weights from {C.base_net_weights}. Weights can be found in the keras application folder \
 		https://github.com/fchollet/keras/tree/master/keras/applications')
 
 optimizer = Adam(lr=1e-5)
@@ -165,7 +178,7 @@ vis = True
 
 for epoch_num in range(num_epochs):
 
-	progbar = generic_utils.Progbar(epoch_length)
+	progbar = Progbar(epoch_length)
 	print('Epoch {}/{}'.format(epoch_num + 1, num_epochs))
 
 	while True:
@@ -180,11 +193,12 @@ for epoch_num in range(num_epochs):
 
 			X, Y, img_data = next(data_gen_train)
 
-			loss_rpn = model_rpn.train_on_batch(X, Y)
+			with tf.device('/device:GPU:0'):
+				loss_rpn = model_rpn.train_on_batch(X, Y)
 
-			P_rpn = model_rpn.predict_on_batch(X)
+				P_rpn = model_rpn.predict_on_batch(X)
 
-			R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, K.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes=300)
+			R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, 'tf', use_regr=True, overlap_thresh=0.7, max_boxes=300)
 			# note: calc_iou converts from (x1,y1,x2,y2) to (x,y,w,h) format
 			X2, Y1, Y2, IouS = roi_helpers.calc_iou(R, img_data, C, class_mapping)
 
@@ -229,7 +243,8 @@ for epoch_num in range(num_epochs):
 				else:
 					sel_samples = random.choice(pos_samples)
 
-			loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
+			with tf.device('/device:GPU:0'):
+				loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
 
 			losses[iter_num, 0] = loss_rpn[1]
 			losses[iter_num, 1] = loss_rpn[2]

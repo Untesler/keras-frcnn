@@ -1,4 +1,7 @@
 # keras-frcnn
+
+> Forked and migrate code to work fine with latest tensorflow-gpu, and can not use a Theano as a backend anymore
+
 Keras implementation of Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks.
 cloned from https://github.com/yhenon/keras-frcnn/
 
