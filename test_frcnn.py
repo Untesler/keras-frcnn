@@ -204,6 +204,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 		for ii in range(P_cls.shape[1]):
 
+			# suppression
 			if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
 				continue
 

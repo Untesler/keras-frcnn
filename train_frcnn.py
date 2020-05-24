@@ -10,6 +10,7 @@ if gpus:
 		# Currently, memory growth needs to be the same across GPUs
 		for gpu in gpus:
 			tf.config.experimental.set_memory_growth(gpu, True)
+			#tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4096)])
 		logical_gpus = tf.config.experimental.list_logical_devices('GPU')
 		print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
 	except RuntimeError as e:
@@ -145,6 +146,8 @@ model_classifier = Model([img_input, roi_input], classifier)
 
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
 model_all = Model([img_input, roi_input], rpn[:2] + classifier)
+#model_all.summary()
+#exit(0)
 
 try:
 	print('loading weights from {}'.format(C.base_net_weights))
@@ -160,7 +163,7 @@ model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(num_anchors), l
 model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 model_all.compile(optimizer='sgd', loss='mae')
 
-epoch_length = 1000
+epoch_length = 10 #batch size
 num_epochs = int(options.num_epochs)
 iter_num = 0
 
@@ -180,7 +183,6 @@ for epoch_num in range(num_epochs):
 
 	progbar = Progbar(epoch_length)
 	print('Epoch {}/{}'.format(epoch_num + 1, num_epochs))
-
 	while True:
 		try:
 
@@ -193,10 +195,10 @@ for epoch_num in range(num_epochs):
 
 			X, Y, img_data = next(data_gen_train)
 
-			with tf.device('/device:GPU:0'):
-				loss_rpn = model_rpn.train_on_batch(X, Y)
-
-				P_rpn = model_rpn.predict_on_batch(X)
+			#with tf.device('/device:GPU:0'):
+			#with tf.device('/device:cpu:0'):
+			loss_rpn = model_rpn.train_on_batch(X, Y)
+			P_rpn = model_rpn.predict_on_batch(X)
 
 			R = roi_helpers.rpn_to_roi(P_rpn[0], P_rpn[1], C, 'tf', use_regr=True, overlap_thresh=0.7, max_boxes=300)
 			# note: calc_iou converts from (x1,y1,x2,y2) to (x,y,w,h) format
@@ -243,8 +245,9 @@ for epoch_num in range(num_epochs):
 				else:
 					sel_samples = random.choice(pos_samples)
 
-			with tf.device('/device:GPU:0'):
-				loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
+			#with tf.device('/device:GPU:0'):
+			#with tf.device('/device:cpu:0'):
+			loss_class = model_classifier.train_on_batch([X, X2[:, sel_samples, :]], [Y1[:, sel_samples, :], Y2[:, sel_samples, :]])
 
 			losses[iter_num, 0] = loss_rpn[1]
 			losses[iter_num, 1] = loss_rpn[2]
@@ -292,5 +295,6 @@ for epoch_num in range(num_epochs):
 		except Exception as e:
 			print('Exception: {}'.format(e))
 			continue
+
 
 print('Training complete, exiting.')

@@ -1,3 +1,13 @@
+# Others
+*.pickle
+*.csv
+*.txt
+Annotations/
+ImageSets/
+JPEGImages/
+labels/
+test/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
