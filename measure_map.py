@@ -1,3 +1,18 @@
+import logging, os
+logging.disable(logging.WARNING)
+
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+	try:
+		# Currently, memory growth needs to be the same across GPUs
+		for gpu in gpus:
+			tf.config.experimental.set_memory_growth(gpu, True)
+		logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+		print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+	except RuntimeError as e:
+		# Memory growth must be set before GPUs have been initialized
+		print(e)
 import os
 import cv2
 import numpy as np
@@ -6,7 +21,6 @@ import pickle
 from optparse import OptionParser
 import time
 from keras_frcnn import config
-import keras_frcnn.resnet as nn
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from keras_frcnn import roi_helpers
@@ -60,14 +74,15 @@ def get_map(pred, gt, f):
 
 		T[pred_class].append(int(found_match))
 
-	for gt_box in gt:
-		if not gt_box['bbox_matched'] and not gt_box['difficult']:
-			if gt_box['class'] not in P:
-				P[gt_box['class']] = []
-				T[gt_box['class']] = []
+	#for gt_box in gt:
+	#	print(gt_box)
+	#	if not gt_box['bbox_matched'] and not gt_box['difficult']:
+	#		if gt_box['class'] not in P:
+	#			P[gt_box['class']] = []
+	#			T[gt_box['class']] = []
 
-			T[gt_box['class']].append(1)
-			P[gt_box['class']].append(0)
+	#		T[gt_box['class']].append(1)
+	#		P[gt_box['class']].append(0)
 
 	#import pdb
 	#pdb.set_trace()
@@ -101,13 +116,18 @@ else:
 
 config_output_filename = options.config_filename
 
-with open(config_output_filename, 'r') as f_in:
+with open(config_output_filename, 'rb') as f_in:
 	C = pickle.load(f_in)
 
 # turn off any data augmentation at test time
 C.use_horizontal_flips = False
 C.use_vertical_flips = False
 C.rot_90 = False
+
+if C.network == 'resnet50':
+	import keras_frcnn.resnet as nn
+elif C.network == 'vgg':
+	import keras_frcnn.vgg as nn
 
 img_path = options.test_path
 
@@ -143,14 +163,19 @@ class_mapping = C.class_mapping
 if 'bg' not in class_mapping:
 	class_mapping['bg'] = len(class_mapping)
 
-class_mapping = {v: k for k, v in class_mapping.iteritems()}
+class_mapping = {v: k for k, v in class_mapping.items()}
 print(class_mapping)
 class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
 C.num_rois = int(options.num_rois)
 
-input_shape_img = (None, None, 3)
-input_shape_features = (None, None, 1024)
 
+if C.network == 'resnet50':
+	num_features = 1024
+elif C.network == 'vgg':
+	num_features = 512
+
+input_shape_img = (None, None, 3)
+input_shape_features = (None, None, num_features)
 
 img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(C.num_rois, 4))
@@ -176,7 +201,7 @@ model_classifier.load_weights(C.model_path, by_name=True)
 model_rpn.compile(optimizer='sgd', loss='mse')
 model_classifier.compile(optimizer='sgd', loss='mse')
 
-all_imgs, _, _ = get_data(options.test_path)
+all_imgs, _, _ = get_data(options.test_path, 'test')
 test_imgs = [s for s in all_imgs if s['imageset'] == 'test']
 
 
