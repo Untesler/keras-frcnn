@@ -126,8 +126,10 @@ C.rot_90 = False
 
 if C.network == 'resnet50':
 	import keras_frcnn.resnet as nn
+	num_features = 1024
 elif C.network == 'vgg':
 	import keras_frcnn.vgg as nn
+	num_features = 512
 
 img_path = options.test_path
 
@@ -167,12 +169,6 @@ class_mapping = {v: k for k, v in class_mapping.items()}
 print(class_mapping)
 class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
 C.num_rois = int(options.num_rois)
-
-
-if C.network == 'resnet50':
-	num_features = 1024
-elif C.network == 'vgg':
-	num_features = 512
 
 input_shape_img = (None, None, 3)
 input_shape_features = (None, None, num_features)
