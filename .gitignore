@@ -7,6 +7,8 @@ ImageSets/
 JPEGImages/
 labels/
 test/
+build_config.py
+config_model/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
