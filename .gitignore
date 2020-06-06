@@ -9,6 +9,8 @@ labels/
 test/
 build_config.py
 config_model/
+test_img/
+test_video/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
